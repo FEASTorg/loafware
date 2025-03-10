@@ -1,0 +1,2 @@
+smbus2
+# Add pyCRUMBS here once it’s published 
