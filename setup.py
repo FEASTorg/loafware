@@ -5,6 +5,7 @@ setup(
     version="0.1.0",
     description="Modular control library for BREAD slices",
     author="Cameron K. Brooks",
+    author_email="cbrook49@uwo.ca",
     packages=find_packages("src"),
     package_dir={"": "src"},
     install_requires=[
