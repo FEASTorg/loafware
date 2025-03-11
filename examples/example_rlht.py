@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-# File: examples/example_rlht.py
 
 import sys
+import os
+import pprint
 import logging
 from loafware.pycrumbs_wrapper import PyCRUMBSWrapper
 from loafware.relay_heater_slice import RelayHeaterSlice, CONTROL, WRITE
 
-logging.basicConfig(level=logging.INFO)
+# Increase logging level to DEBUG for more detailed output.
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("example_rlht")
+
+
+def debug_sys_path():
+    logger.debug("Current sys.path:")
+    pprint.pprint(sys.path)
 
 
 def print_usage():
@@ -22,11 +29,19 @@ def print_usage():
 
 
 def main():
+    # Debug: Print the sys.path and current working directory
+    debug_sys_path()
+    logger.debug("Current working directory: %s", os.getcwd())
+
+    # Log the fact that we're about to initialize our components
+    logger.debug("Initializing PyCRUMBSWrapper and RLHT Slice.")
+
     # Assume the RLHT slice is at I2C address 0x0A (adjust as needed)
     target_address = 0x0A
 
     # Create the pyCRUMBS wrapper (master)
     crumbs_wrapper = PyCRUMBSWrapper(bus_number=1)
+
     # Create an instance of the RLHT slice
     rlht_slice = RelayHeaterSlice(target_address, crumbs_wrapper)
 
