@@ -1,3 +1,4 @@
+from typing import Any, Optional, Tuple, List
 from pyCRUMBS import CRUMBSMessage
 from .slice_base import Slice
 import logging
@@ -10,19 +11,23 @@ WRITE = 1
 
 
 class RelayHeaterSlice(Slice):
-    def __init__(self, target_address: int, crumbs_wrapper):
+    def __init__(self, target_address: int, crumbs_wrapper: Any) -> None:
         super().__init__(target_address, crumbs_wrapper)
         # Initial state variables, using defaults similar to your RLHT firmware:
-        self.mode = CONTROL
-        self.setpoint1 = 0.0
-        self.setpoint2 = 0.0
-        self.pid_tuning1 = (1.0, 0.0, 0.0)  # (Kp, Ki, Kd) for heater 1
-        self.pid_tuning2 = (1.0, 0.0, 0.0)  # for heater 2
-        self.relay_period1 = 1000
-        self.relay_period2 = 1000
+        self.mode: int = CONTROL
+        self.setpoint1: float = 0.0
+        self.setpoint2: float = 0.0
+        self.pid_tuning1: Tuple[float, float, float] = (
+            1.0,
+            0.0,
+            0.0,
+        )  # (Kp, Ki, Kd) for heater 1
+        self.pid_tuning2: Tuple[float, float, float] = (1.0, 0.0, 0.0)  # for heater 2
+        self.relay_period1: int = 1000
+        self.relay_period2: int = 1000
         # Other parameters can be added as needed
 
-    def handle_message(self, message: CRUMBSMessage):
+    def handle_message(self, message: CRUMBSMessage) -> None:
         """
         Process an incoming message from the slice.
         This would typically be invoked after a status request.
@@ -30,7 +35,7 @@ class RelayHeaterSlice(Slice):
         # For MVP, simply log the received status
         logger.info("Received response from slice: %s", message)
 
-    def request_status(self):
+    def request_status(self) -> None:
         """
         Request a status update from the RLHT slice.
         Uses command type 0.
@@ -44,7 +49,9 @@ class RelayHeaterSlice(Slice):
         logger.info(
             "Requesting status from slice at address 0x%02X", self.target_address
         )
-        response = self.crumbs.request_message(self.target_address)
+        response: Optional[CRUMBSMessage] = self.crumbs.request_message(
+            self.target_address
+        )
         if response:
             self.handle_message(response)
         else:
@@ -53,7 +60,7 @@ class RelayHeaterSlice(Slice):
                 self.target_address,
             )
 
-    def send_command(self, command_type: int, data: list):
+    def send_command(self, command_type: int, data: List[float]) -> None:
         """
         Send a command to the RLHT slice.
         :param command_type: Command type (e.g., 1 for mode change, 2 for setpoint change, etc.)
@@ -77,18 +84,20 @@ class RelayHeaterSlice(Slice):
 
     # Convenience methods for common commands:
 
-    def change_mode(self, mode: int):
+    def change_mode(self, mode: int) -> None:
         """Change mode: 0 for CONTROL, 1 for WRITE."""
         self.mode = mode
         self.send_command(1, [float(mode)] + [0.0] * 5)
 
-    def change_setpoints(self, setpoint1: float, setpoint2: float):
+    def change_setpoints(self, setpoint1: float, setpoint2: float) -> None:
         """Change setpoints for heater 1 and heater 2."""
         self.setpoint1 = setpoint1
         self.setpoint2 = setpoint2
         self.send_command(2, [setpoint1, setpoint2] + [0.0] * 4)
 
-    def change_pid_tuning(self, pid1: tuple, pid2: tuple):
+    def change_pid_tuning(
+        self, pid1: Tuple[float, float, float], pid2: Tuple[float, float, float]
+    ) -> None:
         """
         Change PID tuning parameters.
         :param pid1: (Kp, Ki, Kd) for heater 1.
@@ -96,10 +105,10 @@ class RelayHeaterSlice(Slice):
         """
         self.pid_tuning1 = pid1
         self.pid_tuning2 = pid2
-        data = list(pid1) + list(pid2)
+        data: List[float] = list(pid1) + list(pid2)
         self.send_command(3, data)
 
-    def write_relays(self, relay1: float, relay2: float):
+    def write_relays(self, relay1: float, relay2: float) -> None:
         """
         Directly set relay duty cycle (0-100%). This command is valid in WRITE mode.
         """
@@ -108,5 +117,8 @@ class RelayHeaterSlice(Slice):
             logger.error("Cannot write relays unless in WRITE mode.")
             return
         # Clamp values and send (scale to the appropriate period if necessary)
-        data = [min(max(relay1, 0.0), 100.0), min(max(relay2, 0.0), 100.0)] + [0.0] * 4
+        data: List[float] = [
+            min(max(relay1, 0.0), 100.0),
+            min(max(relay2, 0.0), 100.0),
+        ] + [0.0] * 4
         self.send_command(6, data)

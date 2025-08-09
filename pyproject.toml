@@ -1,0 +1,29 @@
+# Build system configuration
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# Project metadata
+[project]
+name = "loafware"
+version = "0.1.0"
+description = "Modular control library for BREAD slices"
+authors = [{ name = "Cameron K. Brooks", email = "cbrook49@uwo.ca" }]
+license = { text = "AGPLv3" }
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "smbus2",
+    # "pyCRUMBS",  # Uncomment when available on PyPI
+]
+
+# Setuptools configuration
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.package-data]
+"loafware" = ["py.typed"]

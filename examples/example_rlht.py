@@ -2,12 +2,11 @@
 # File: examples/example_rlht.py
 
 import sys
-
-print("sys.path:", sys.path)
-
 import logging
 from loafware.pycrumbs_wrapper import PyCRUMBSWrapper
-from loafware.relay_heater_slice import RelayHeaterSlice, CONTROL, WRITE
+from loafware.relay_heater_slice import RelayHeaterSlice
+
+print("sys.path:", sys.path)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("example_rlht")
