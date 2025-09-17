@@ -1,3 +1,4 @@
+# src/loafware/relay_heater_slice.py
 from typing import Any, Optional, Tuple, List
 from pyCRUMBS import CRUMBSMessage
 from .slice_base import Slice
@@ -5,120 +6,204 @@ import logging
 
 logger = logging.getLogger("loafware.relay_heater_slice")
 
-# Define some constants to mimic the C++ definitions
+# Device constants (must match firmware)
+DEVICE_TYPE_ID = 1  # RLHT firmware TYPE_ID
+
+# Modes (match RLHT firmware Mode enum)
 CONTROL = 0
 WRITE = 1
 
 
 class RelayHeaterSlice(Slice):
+    """
+    RLHT (relay-heater) slice wrapper.
+    - request_status() returns the CRUMBSMessage (and updates internal state) or None.
+    - send_command(...) returns True if the message was written to the bus (not a remote success guarantee).
+    """
+
     def __init__(self, target_address: int, crumbs_wrapper: Any) -> None:
         super().__init__(target_address, crumbs_wrapper)
-        # Initial state variables, using defaults similar to your RLHT firmware:
+        # Mirror firmware state fields
         self.mode: int = CONTROL
+        self.temperature1: float = 0.0
+        self.temperature2: float = 0.0
         self.setpoint1: float = 0.0
         self.setpoint2: float = 0.0
-        self.pid_tuning1: Tuple[float, float, float] = (
-            1.0,
-            0.0,
-            0.0,
-        )  # (Kp, Ki, Kd) for heater 1
-        self.pid_tuning2: Tuple[float, float, float] = (1.0, 0.0, 0.0)  # for heater 2
+        self.relay_on_time1: float = 0.0
+        self.relay_on_time2: float = 0.0
         self.relay_period1: int = 1000
         self.relay_period2: int = 1000
-        # Other parameters can be added as needed
+        self.pid_tuning1: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+        self.pid_tuning2: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+        self.error_flags: int = 0
 
     def handle_message(self, message: CRUMBSMessage) -> None:
         """
-        Process an incoming message from the slice.
-        This would typically be invoked after a status request.
+        Parse an incoming status message from RLHT and update internal state.
+        Firmware handleRequest returns (for commandType 0):
+          data[0] = temperature1
+          data[1] = temperature2
+          data[2] = setpoint1
+          data[3] = setpoint2
+          data[4] = relayOnTime1
+          data[5] = relayOnTime2
         """
-        # For MVP, simply log the received status
-        logger.info("Received response from slice: %s", message)
+        try:
+            # Optional: warn if typeID mismatch
+            if int(getattr(message, "typeID", -1)) != DEVICE_TYPE_ID:
+                logger.warning(
+                    "handle_message: unexpected typeID %s (expected %d) from 0x%02X",
+                    getattr(message, "typeID", None),
+                    DEVICE_TYPE_ID,
+                    self.target_address,
+                )
 
-    def request_status(self) -> None:
-        """
-        Request a status update from the RLHT slice.
-        Uses command type 0.
-        """
-        msg = CRUMBSMessage()
-        msg.typeID = 1  # expected SLICE type for RLHT
-        msg.commandType = 0  # data request command
-        # Set data fields to zero (or as needed)
-        msg.data = [0.0] * 6
-        msg.errorFlags = 0
-        logger.info(
-            "Requesting status from slice at address 0x%02X", self.target_address
-        )
-        response: Optional[CRUMBSMessage] = self.crumbs.request_message(
-            self.target_address
-        )
-        if response:
-            self.handle_message(response)
-        else:
-            logger.error(
-                "No valid response received from slice at address 0x%02X",
+            # Parse fields (be defensive about length)
+            d = list(message.data) if hasattr(message, "data") else [0.0] * 6
+            # pad/truncate to 6
+            if len(d) < 6:
+                d = d + [0.0] * (6 - len(d))
+            else:
+                d = d[:6]
+
+            self.temperature1 = float(d[0])
+            self.temperature2 = float(d[1])
+            self.setpoint1 = float(d[2])
+            self.setpoint2 = float(d[3])
+            self.relay_on_time1 = float(d[4])
+            self.relay_on_time2 = float(d[5])
+            self.error_flags = int(getattr(message, "errorFlags", 0))
+
+            logger.info(
+                "RLHT @0x%02X status: T1=%.2f T2=%.2f SP1=%.2f SP2=%.2f onTime1=%.1f onTime2=%.1f err=0x%02X",
                 self.target_address,
+                self.temperature1,
+                self.temperature2,
+                self.setpoint1,
+                self.setpoint2,
+                self.relay_on_time1,
+                self.relay_on_time2,
+                self.error_flags,
+            )
+        except Exception as e:
+            logger.exception(
+                "handle_message: failed to parse message from 0x%02X: %s",
+                self.target_address,
+                e,
             )
 
-    def send_command(self, command_type: int, data: List[float]) -> None:
+    def request_status(self) -> Optional[CRUMBSMessage]:
         """
-        Send a command to the RLHT slice.
-        :param command_type: Command type (e.g., 1 for mode change, 2 for setpoint change, etc.)
-        :param data: List of 6 floats for the payload.
+        Request a status update from the RLHT slice (commandType 0).
+        Returns the CRUMBSMessage if received and decoded, otherwise None.
         """
-        if len(data) != 6:
-            logger.error("send_command: Data payload must have 6 float values.")
-            return
-        msg = CRUMBSMessage()
-        msg.typeID = 1  # RLHT slice type ID
-        msg.commandType = command_type
-        msg.data = data
-        msg.errorFlags = 0
-        logger.info(
-            "Sending command type %d to slice at address 0x%02X with data %s",
-            command_type,
-            self.target_address,
-            data,
+        logger.debug(
+            "request_status: requesting status from 0x%02X", self.target_address
         )
-        self.crumbs.send_message(msg, self.target_address)
+        try:
+            response: Optional[CRUMBSMessage] = self.crumbs.request_message(
+                self.target_address
+            )
+            if response is None:
+                logger.error(
+                    "request_status: no response from 0x%02X", self.target_address
+                )
+                return None
+            # Let handler parse and update local state
+            self.handle_message(response)
+            return response
+        except Exception as e:
+            logger.exception(
+                "request_status: exception requesting status from 0x%02X: %s",
+                self.target_address,
+                e,
+            )
+            return None
 
-    # Convenience methods for common commands:
+    def send_command(self, command_type: int, data: List[float]) -> bool:
+        """
+        Send a command to RLHT. Data must be length 6 (pads/truncates if needed).
+        Returns True if the message was written to the bus.
+        """
+        try:
+            # normalize payload to 6 floats
+            if not isinstance(data, (list, tuple)):
+                logger.error("send_command: payload must be list/tuple of floats")
+                return False
+            payload = [float(x) for x in data]
+            if len(payload) < 6:
+                payload += [0.0] * (6 - len(payload))
+            elif len(payload) > 6:
+                payload = payload[:6]
 
-    def change_mode(self, mode: int) -> None:
-        """Change mode: 0 for CONTROL, 1 for WRITE."""
-        self.mode = mode
-        self.send_command(1, [float(mode)] + [0.0] * 5)
+            msg = CRUMBSMessage()
+            msg.typeID = DEVICE_TYPE_ID
+            msg.commandType = int(command_type)
+            msg.data = payload
+            msg.errorFlags = 0
 
-    def change_setpoints(self, setpoint1: float, setpoint2: float) -> None:
-        """Change setpoints for heater 1 and heater 2."""
-        self.setpoint1 = setpoint1
-        self.setpoint2 = setpoint2
-        self.send_command(2, [setpoint1, setpoint2] + [0.0] * 4)
+            self.crumbs.send_message(msg, self.target_address)
+            logger.debug(
+                "send_command: sent cmd=%d to 0x%02X data=%s",
+                command_type,
+                self.target_address,
+                payload,
+            )
+            return True
+        except Exception as e:
+            logger.exception(
+                "send_command: failed to send to 0x%02X: %s", self.target_address, e
+            )
+            return False
+
+    # Convenience wrappers -------------------------------------------------
+
+    def change_mode(self, mode: int) -> bool:
+        """Change mode: CONTROL=0 or WRITE=1."""
+        if mode not in (CONTROL, WRITE):
+            logger.error("change_mode: invalid mode %s", mode)
+            return False
+        self.mode = int(mode)
+        return self.send_command(1, [float(mode)] + [0.0] * 5)
+
+    def change_setpoints(self, setpoint1: float, setpoint2: float) -> bool:
+        """Change setpoints for heater 1 and heater 2 (commandType 2)."""
+        self.setpoint1 = float(setpoint1)
+        self.setpoint2 = float(setpoint2)
+        return self.send_command(2, [self.setpoint1, self.setpoint2] + [0.0] * 4)
 
     def change_pid_tuning(
         self, pid1: Tuple[float, float, float], pid2: Tuple[float, float, float]
-    ) -> None:
-        """
-        Change PID tuning parameters.
-        :param pid1: (Kp, Ki, Kd) for heater 1.
-        :param pid2: (Kp, Ki, Kd) for heater 2.
-        """
-        self.pid_tuning1 = pid1
-        self.pid_tuning2 = pid2
-        data: List[float] = list(pid1) + list(pid2)
-        self.send_command(3, data)
+    ) -> bool:
+        """Change PID tuning parameters (commandType 3)."""
+        if len(pid1) != 3 or len(pid2) != 3:
+            logger.error("change_pid_tuning: pid tuples must be length 3")
+            return False
+        self.pid_tuning1 = (float(pid1[0]), float(pid1[1]), float(pid1[2]))
+        self.pid_tuning2 = (float(pid2[0]), float(pid2[1]), float(pid2[2]))
+        data: List[float] = [*self.pid_tuning1, *self.pid_tuning2]
+        return self.send_command(3, data)
 
-    def write_relays(self, relay1: float, relay2: float) -> None:
+    def change_relay_periods(self, period1_ms: int, period2_ms: int) -> bool:
+        """Change relay periods (commandType 4)."""
+        self.relay_period1 = int(period1_ms)
+        self.relay_period2 = int(period2_ms)
+        return self.send_command(
+            4, [float(self.relay_period1), float(self.relay_period2)] + [0.0] * 4
+        )
+
+    def change_thermo_select(self, t1: int, t2: int) -> bool:
+        """Select thermocouples for relays (commandType 5)."""
+        return self.send_command(5, [float(t1), float(t2)] + [0.0] * 4)
+
+    def write_relays(self, relay1_pct: float, relay2_pct: float) -> bool:
         """
-        Directly set relay duty cycle (0-100%). This command is valid in WRITE mode.
+        Directly set relay duty cycle (0-100%). This command is valid only in WRITE mode.
+        Firmware expects 0-100 values and maps them to onTime using relayPeriod.
         """
-        # For safety, ensure mode is WRITE
         if self.mode != WRITE:
-            logger.error("Cannot write relays unless in WRITE mode.")
-            return
-        # Clamp values and send (scale to the appropriate period if necessary)
-        data: List[float] = [
-            min(max(relay1, 0.0), 100.0),
-            min(max(relay2, 0.0), 100.0),
-        ] + [0.0] * 4
-        self.send_command(6, data)
+            logger.error("write_relays: cannot write unless in WRITE mode")
+            return False
+        r1 = float(max(0.0, min(100.0, relay1_pct)))
+        r2 = float(max(0.0, min(100.0, relay2_pct)))
+        return self.send_command(6, [r1, r2, 0.0, 0.0, 0.0, 0.0])

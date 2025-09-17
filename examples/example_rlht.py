@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# File: examples/example_rlht.py
+"""
+Loafware RLHT interactive example.
+"""
 
-import sys
 import logging
 from loafware.pycrumbs_wrapper import PyCRUMBSWrapper
 from loafware.relay_heater_slice import RelayHeaterSlice
-
-print("sys.path:", sys.path)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("example_rlht")
@@ -15,59 +14,73 @@ logger = logging.getLogger("example_rlht")
 def print_usage():
     print("Loafware RLHT Example")
     print("Commands:")
-    print("  status                  -> Request status from the RLHT slice")
-    print("  mode [0|1]              -> Change mode (0: CONTROL, 1: WRITE)")
-    print("  set [sp1] [sp2]         -> Change setpoints for heater 1 and heater 2")
+    print("  status                       -> Request status from the RLHT slice")
+    print("  mode [0|1]                   -> Change mode (0: CONTROL, 1: WRITE)")
+    print("  set [sp1] [sp2]              -> Change setpoints for heater 1 and 2")
     print("  pid [Kp1] [Ki1] [Kd1] [Kp2] [Ki2] [Kd2] -> Change PID tuning")
-    print("  write [r1] [r2]         -> Write relay values (0-100, WRITE mode only)")
-    print("  exit                    -> Exit the program")
+    print(
+        "  write [r1] [r2]              -> Write relay values (0-100, WRITE mode only)"
+    )
+    print("  exit                         -> Exit the program")
+
+
+def show_status(rlht: RelayHeaterSlice):
+    print(
+        f"Addr 0x{rlht.target_address:02X} | Mode: {rlht.mode} | "
+        f"T1={rlht.temperature1:.2f}C T2={rlht.temperature2:.2f}C | "
+        f"SP1={rlht.setpoint1:.2f} SP2={rlht.setpoint2:.2f} | "
+        f"onTime1={rlht.relay_on_time1:.1f} onTime2={rlht.relay_on_time2:.1f} | "
+        f"err=0x{rlht.error_flags:02X}"
+    )
 
 
 def main():
-    # Assume the RLHT slice is at I2C address 0x0A (adjust as needed)
-    target_address = 0x0A
-
-    # Create the pyCRUMBS wrapper (master)
-    crumbs_wrapper = PyCRUMBSWrapper(bus_number=1)
-    # Create an instance of the RLHT slice
-    rlht_slice = RelayHeaterSlice(target_address, crumbs_wrapper)
+    target_address = 0x0A  # adjust to your device
+    crumbs = PyCRUMBSWrapper(bus_number=1)
+    rlht = RelayHeaterSlice(target_address, crumbs)
 
     print_usage()
-
-    while True:
-        try:
-            cmd = input("Enter command: ").strip()
-            if cmd == "":
-                continue
-            if cmd.lower() == "exit":
+    try:
+        while True:
+            try:
+                cmd = input("Enter command: ").strip()
+            except EOFError:
                 break
+            if not cmd:
+                continue
+            if cmd.lower() in ("exit", "quit"):
+                break
+
             parts = cmd.split()
-            if parts[0] == "status":
-                rlht_slice.request_status()
-            elif parts[0] == "mode" and len(parts) == 2:
-                mode = int(parts[1])
-                rlht_slice.change_mode(mode)
-            elif parts[0] == "set" and len(parts) == 3:
-                sp1 = float(parts[1])
-                sp2 = float(parts[2])
-                rlht_slice.change_setpoints(sp1, sp2)
-            elif parts[0] == "pid" and len(parts) == 7:
-                pid1 = (float(parts[1]), float(parts[2]), float(parts[3]))
-                pid2 = (float(parts[4]), float(parts[5]), float(parts[6]))
-                rlht_slice.change_pid_tuning(pid1, pid2)
-            elif parts[0] == "write" and len(parts) == 3:
-                r1 = float(parts[1])
-                r2 = float(parts[2])
-                rlht_slice.write_relays(r1, r2)
-            else:
-                print("Invalid command or parameters.")
-                print_usage()
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            logger.error("Error: %s", e)
-    crumbs_wrapper.close()
-    print("Exiting RLHT example.")
+            try:
+                if parts[0] == "status":
+                    resp = rlht.request_status()
+                    if resp:
+                        show_status(rlht)
+                    else:
+                        print("No response or failed to parse status.")
+                elif parts[0] == "mode" and len(parts) == 2:
+                    ok = rlht.change_mode(int(parts[1]))
+                    print("OK" if ok else "Failed")
+                elif parts[0] == "set" and len(parts) == 3:
+                    ok = rlht.change_setpoints(float(parts[1]), float(parts[2]))
+                    print("OK" if ok else "Failed")
+                elif parts[0] == "pid" and len(parts) == 7:
+                    pid1 = (float(parts[1]), float(parts[2]), float(parts[3]))
+                    pid2 = (float(parts[4]), float(parts[5]), float(parts[6]))
+                    ok = rlht.change_pid_tuning(pid1, pid2)
+                    print("OK" if ok else "Failed")
+                elif parts[0] == "write" and len(parts) == 3:
+                    ok = rlht.write_relays(float(parts[1]), float(parts[2]))
+                    print("OK" if ok else "Failed (mode must be WRITE)")
+                else:
+                    print("Invalid command or parameters.")
+                    print_usage()
+            except ValueError as ve:
+                logger.error("Invalid numeric value: %s", ve)
+    finally:
+        crumbs.close()
+        print("Exiting RLHT example.")
 
 
 if __name__ == "__main__":

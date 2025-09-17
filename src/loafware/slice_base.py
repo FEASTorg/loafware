@@ -1,4 +1,5 @@
-from typing import Any, List
+# src/loafware/slice_base.py
+from typing import Any, List, Optional
 import abc
 
 
@@ -23,20 +24,22 @@ class Slice(abc.ABC):
         Process an incoming CRUMBSMessage.
         :param message: The CRUMBSMessage to process.
         """
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def request_status(self) -> None:
+    def request_status(self) -> Optional[Any]:
         """
         Request a status update from the slice.
+        Should return the decoded CRUMBSMessage or None on failure.
         """
-        pass
+        raise NotImplementedError
 
     @abc.abstractmethod
-    def send_command(self, command_type: int, data: List[float]) -> None:
+    def send_command(self, command_type: int, data: List[float]) -> bool:
         """
         Send a command to the slice.
         :param command_type: The CRUMBS command type.
         :param data: List of 6 float values for the payload.
+        :return: True if the send was issued (doesn't guarantee remote success).
         """
-        pass
+        raise NotImplementedError
