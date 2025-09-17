@@ -40,6 +40,8 @@ def main():
     crumbs = PyCRUMBSWrapper(bus_number=1)
     rlht = RelayHeaterSlice(target_address, crumbs)
 
+    print("Connected to RLHT slice at I2C address 0x%02X", target_address)
+
     print_usage()
     try:
         while True:

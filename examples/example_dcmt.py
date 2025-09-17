@@ -56,6 +56,8 @@ def main():
     crumbs = PyCRUMBSWrapper(bus_number=1)
     motor = MotorControllerSlice(target_address, crumbs)
 
+    print("Connected to DCMT slice at I2C address 0x%02X", target_address)
+
     print_usage()
     try:
         while True:
