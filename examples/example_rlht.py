@@ -10,6 +10,7 @@ from loafware.relay_heater_slice import RelayHeaterSlice
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("example_rlht")
 
+I2C_ADDRESS = 0x10
 
 def print_usage():
     print("Loafware RLHT Example")
@@ -35,7 +36,7 @@ def show_status(rlht: RelayHeaterSlice):
 
 
 def main():
-    target_address = 0x0A  # adjust to your device
+    target_address = I2C_ADDRESS
     crumbs = PyCRUMBSWrapper(bus_number=1)
     rlht = RelayHeaterSlice(target_address, crumbs)
 

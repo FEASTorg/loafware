@@ -15,6 +15,8 @@ from loafware.motor_controller_slice import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("example_dcmt")
 
+I2C_ADDRESS = 0x14  # change to your motor slice address
+
 
 def print_usage():
     print("Loafware DCMT Example")
@@ -50,7 +52,7 @@ def show_status(m: MotorControllerSlice):
 
 
 def main():
-    target_address = 0x0E  # change to your motor slice address
+    target_address = I2C_ADDRESS
     crumbs = PyCRUMBSWrapper(bus_number=1)
     motor = MotorControllerSlice(target_address, crumbs)
 
