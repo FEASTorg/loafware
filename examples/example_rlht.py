@@ -10,7 +10,8 @@ from loafware.relay_heater_slice import RelayHeaterSlice
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("example_rlht")
 
-I2C_ADDRESS = 0x1a
+I2C_ADDRESS = 0x1A
+
 
 def print_usage():
     print("Loafware RLHT Example")
@@ -26,12 +27,17 @@ def print_usage():
 
 
 def show_status(rlht: RelayHeaterSlice):
+    temp1 = getattr(rlht, "temperature1", 0.0)
+    temp2 = getattr(rlht, "temperature2", 0.0)
+    on1 = getattr(rlht, "relay_on_time1", 0.0)
+    on2 = getattr(rlht, "relay_on_time2", 0.0)
+    err = getattr(rlht, "error_flags", 0)
     print(
         f"Addr 0x{rlht.target_address:02X} | Mode: {rlht.mode} | "
-        f"T1={rlht.temperature1:.2f}C T2={rlht.temperature2:.2f}C | "
+        f"T1={temp1:.2f}C T2={temp2:.2f}C | "
         f"SP1={rlht.setpoint1:.2f} SP2={rlht.setpoint2:.2f} | "
-        f"onTime1={rlht.relay_on_time1:.1f} onTime2={rlht.relay_on_time2:.1f} | "
-        f"err=0x{rlht.error_flags:02X}"
+        f"onTime1={on1:.1f} onTime2={on2:.1f} | "
+        f"err=0x{err:02X}"
     )
 
 
@@ -40,7 +46,7 @@ def main():
     crumbs = PyCRUMBSWrapper(bus_number=1)
     rlht = RelayHeaterSlice(target_address, crumbs)
 
-    print("Connected to RLHT slice at I2C address 0x%02X", target_address)
+    print(f"Connected to RLHT slice at I2C address 0x{target_address:02X}")
 
     print_usage()
     try:
