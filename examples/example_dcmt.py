@@ -15,7 +15,7 @@ from loafware.motor_controller_slice import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("example_dcmt")
 
-I2C_ADDRESS = 0x1A  # change to your motor slice address
+I2C_ADDRESS = 0x0E  # set to 14 in arduino code
 
 
 def print_usage():

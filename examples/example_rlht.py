@@ -10,7 +10,7 @@ from loafware.relay_heater_slice import RelayHeaterSlice
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("example_rlht")
 
-I2C_ADDRESS = 0x1A
+I2C_ADDRESS = 0x0A  # set to 10 in arduino code
 
 
 def print_usage():
